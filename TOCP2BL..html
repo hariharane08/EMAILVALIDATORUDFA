@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Validation DFA Visualizer - P2BL Project</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 2rem; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    
+    header { text-align: center; margin-bottom: 2rem; }
+    header h1 { font-size: 2.2rem; color: var(--accent); margin-bottom: 0.5rem; }
+    header p { color: var(--muted); }
+
+    .container { width: 100%; max-width: 1000px; display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+
+    .card { background: var(--card); border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; }
+    
+    /* Controls Section */
+    .input-group { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
+    input[type="text"] { flex: 1; min-width: 200px; padding: 12px 16px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 1rem; outline: none; }
+    input[type="text"]:focus { border-color: var(--accent); }
+
+    button { padding: 12px 20px; border-radius: 8px; border: none; background: var(--accent); color: #0f172a; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    button:hover { opacity: 0.9; }
+    button.reset { background: #475569; color: #fff; }
+
+    .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .chip { background: #334155; padding: 6px 12px; border-radius: 16px; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
+    .chip:hover { background: var(--accent); color: #0f172a; }
+
+    /* Final Result Verdict Box */
+    .verdict-box {
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+      transition: all 0.3s ease;
+      background: #0f172a;
+      border: 2px solid #334155;
+    }
+
+    .verdict-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .verdict-status {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .verdict-details {
+      font-size: 0.85rem;
+      margin-top: 0.4rem;
+      color: var(--muted);
+    }
+
+    /* Verdict Box States */
+    .verdict-box.valid {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: var(--success);
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
+    }
+    .verdict-box.valid .verdict-status { color: var(--success); }
+
+    .verdict-box.invalid {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: var(--error);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+    }
+    .verdict-box.invalid .verdict-status { color: var(--error); }
+
+    .verdict-box.processing {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: var(--accent);
+    }
+    .verdict-box.processing .verdict-status { color: var(--accent); }
+
+    /* DFA Visualizer Diagram */
+    .states-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 1rem; }
+    .state-node { background: #0f172a; border: 2px solid #475569; border-radius: 8px; padding: 12px; text-align: center; transition: all 0.3s ease; }
+    .state-node.active { border-color: var(--accent); background: #0284c7; color: white; transform: scale(1.05); box-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
+    .state-node.accept-state { border-style: double; border-width: 4px; }
+    .state-node.accept-state.active { border-color: var(--success); background: #15803d; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+    .state-node.trap-state.active { border-color: var(--error); background: #b91c1c; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+    
+    .state-title { font-weight: bold; font-size: 1.1rem; }
+    .state-desc { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .state-node.active .state-desc { color: #e2e8f0; }
+
+    /* Execution Tape & Logs */
+    .tape-container { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; margin-top: 6px; }
+    .char-box { min-width: 36px; height: 40px; display: flex; align-items: center; justify-content: center; background: #0f172a; border: 1px solid #475569; border-radius: 6px; font-weight: bold; font-family: monospace; font-size: 1.1rem; }
+    .char-box.processed { background: #334155; color: var(--muted); }
+    .char-box.current { border-color: var(--warning); background: var(--warning); color: #0f172a; transform: scale(1.1); }
+
+    .log-list { background: #0f172a; border-radius: 8px; padding: 12px; max-height: 180px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; margin-top: 10px; border: 1px solid #334155; }
+    .log-item { padding: 4px 0; border-bottom: 1px solid #1e293b; color: var(--muted); }
+    .log-item span { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>DFA Email Validator</h1>
+    <p>Theory of Computation P2BL Project | Hardcoded TLDs: <code>.com</code>, <code>.in</code>, <code>.org</code></p>
+  </header>
+
+  <div class="container">
+    <!-- Controls & Inputs -->
+    <div class="card">
+      <div class="input-group">
+        <input type="text" id="emailInput" placeholder="Enter email (e.g., student@site.in)" value="user@domain.com">
+        <button id="btnStep">Step Forward</button>
+        <button id="btnRun">Auto Run</button>
+        <button id="btnReset" class="reset">Reset</button>
+      </div>
+
+      <div class="presets">
+        <span style="color: var(--muted); font-size: 0.85rem; align-self: center;">Examples:</span>
+        <div class="chip" onclick="loadExample('alex@company.com')">alex@company.com</div>
+        <div class="chip" onclick="loadExample('student@sathyabama.ac.in')">student@sathyabama.ac.in</div>
+        <div class="chip" onclick="loadExample('info@org.org')">info@org.org</div>
+        <div class="chip" onclick="loadExample('hariharan@.com')">hariharan@.com (Missing Domain - INVALID)</div>
+        <div class="chip" onclick="loadExample('user@site.ai')">user@site.ai (Invalid TLD)</div>
+      </div>
+
+      <!-- Verdict Box -->
+      <div id="verdictBox" class="verdict-box">
+        <div class="verdict-title">Final Machine Result</div>
+        <div id="verdictStatus" class="verdict-status">READY</div>
+        <div id="verdictDetails" class="verdict-details">Input an email string and click 'Step' or 'Auto Run'</div>
+      </div>
+
+      <!-- String Tape -->
+      <label style="font-size: 0.85rem; color: var(--muted);">Input String Execution Tape:</label>
+      <div class="tape-container" id="tape"></div>
+    </div>
+
+    <!-- DFA Visual Node Diagram -->
+    <div class="card">
+      <h3>Active DFA State Transition Diagram</h3>
+      <div class="states-grid">
+        <div class="state-node active" id="node-q0"><div class="state-title">q0</div><div class="state-desc">Start / Username</div></div>
+        <div class="state-node" id="node-q1"><div class="state-title">q1</div><div class="state-desc">Username loop</div></div>
+        <div class="state-node" id="node-q2"><div class="state-title">q2</div><div class="state-desc">Read '@' (Waiting for domain char)</div></div>
+        <div class="state-node" id="node-q_dom"><div class="state-title">q_dom</div><div class="state-desc">Domain name loop</div></div>
+        <div class="state-node" id="node-q3"><div class="state-title">q3</div><div class="state-desc">Dot '.' read</div></div>
+        <div class="state-node" id="node-qc"><div class="state-title">qc</div><div class="state-desc">Read '.c'</div></div>
+        <div class="state-node" id="node-qco"><div class="state-title">qco</div><div class="state-desc">Read '.co'</div></div>
+        <div class="state-node" id="node-qi"><div class="state-title">qi</div><div class="state-desc">Read '.i'</div></div>
+        <div class="state-node" id="node-qo"><div class="state-title">qo</div><div class="state-desc">Read '.o'</div></div>
+        <div class="state-node" id="node-qor"><div class="state-title">qor</div><div class="state-desc">Read '.or'</div></div>
+        <div class="state-node accept-state" id="node-q_accept"><div class="state-title">q_accept</div><div class="state-desc">Accepting State</div></div>
+        <div class="state-node trap-state" id="node-qtrap"><div class="state-title">qtrap</div><div class="state-desc">Dead / Trap State</div></div>
+      </div>
+    </div>
+
+    <!-- State Transition Logs -->
+    <div class="card">
+      <h3>Transition Function Log ($\delta(q, \sigma)$)</h3>
+      <div class="log-list" id="logs">
+        <div class="log-item">Engine initialized. Ready to process string.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('emailInput');
+    const tape = document.getElementById('tape');
+    const logs = document.getElementById('logs');
+    const verdictBox = document.getElementById('verdictBox');
+    const verdictStatus = document.getElementById('verdictStatus');
+    const verdictDetails = document.getElementById('verdictDetails');
+
+    let inputString = "";
+    let currentIndex = 0;
+    let currentState = "q0";
+    let autoRunInterval = null;
+
+    function isAlphanumeric(char) {
+      return /^[a-zA-Z0-9]$/.test(char);
+    }
+
+    function initTape() {
+      inputString = input.value.trim();
+      tape.innerHTML = "";
+      for (let i = 0; i < inputString.length; i++) {
+        const box = document.createElement('div');
+        box.className = 'char-box';
+        box.id = `char-${i}`;
+        box.textContent = inputString[i];
+        tape.appendChild(box);
+      }
+      resetState();
+    }
+
+    function resetState() {
+      if (autoRunInterval) clearInterval(autoRunInterval);
+      autoRunInterval = null;
+      currentIndex = 0;
+      currentState = "q0";
+
+      verdictBox.className = 'verdict-box';
+      verdictStatus.textContent = 'READY';
+      verdictDetails.textContent = 'Click "Step Forward" or "Auto Run" to evaluate.';
+
+      logs.innerHTML = '<div class="log-item">Engine reset. Ready at initial state <span>q0</span>.</div>';
+      updateUI();
+    }
+
+    function updateUI() {
+      document.querySelectorAll('.state-node').forEach(node => node.classList.remove('active'));
+      const activeNode = document.getElementById(`node-${currentState}`);
+      if (activeNode) activeNode.classList.add('active');
+
+      for (let i = 0; i < inputString.length; i++) {
+        const box = document.getElementById(`char-${i}`);
+        if (!box) continue;
+        box.className = 'char-box';
+        if (i < currentIndex) box.classList.add('processed');
+        else if (i === currentIndex) box.classList.add('current');
+      }
+    }
+
+    function transition(state, char) {
+      if (state === 'q0') {
+        if (isAlphanumeric(char)) return 'q1';
+      } else if (state === 'q1') {
+        if (char === '@') return 'q2';
+        if (isAlphanumeric(char)) return 'q1';
+      } else if (state === 'q2') {
+        if (isAlphanumeric(char)) return 'q_dom';
+      } else if (state === 'q_dom') {
+        if (char === '.') return 'q3';
+        if (isAlphanumeric(char)) return 'q_dom';
+      } else if (state === 'q3') {
+        if (char === 'c') return 'qc';
+        if (char === 'i') return 'qi';
+        if (char === 'o') return 'qo';
+      } else if (state === 'qc') {
+        if (char === 'o') return 'qco';
+      } else if (state === 'qco') {
+        if (char === 'm') return 'q_accept';
+      } else if (state === 'qi') {
+        if (char === 'n') return 'q_accept';
+      } else if (state === 'qo') {
+        if (char === 'r') return 'qor';
+      } else if (state === 'qor') {
+        if (char === 'g') return 'q_accept';
+      }
+      return 'qtrap';
+    }
+
+    function finalizeVerdict() {
+      if (currentState === 'q_accept') {
+        verdictBox.className = 'verdict-box valid';
+        verdictStatus.textContent = 'VALID EMAIL ADDRESS';
+        verdictDetails.textContent = 'Halted in accept state (q_accept) with recognized TLD (.com, .in, or .org).';
+      } else {
+        verdictBox.className = 'verdict-box invalid';
+        verdictStatus.textContent = 'INVALID EMAIL ADDRESS';
+        if (currentState === 'qtrap') {
+          verdictDetails.textContent = 'Machine transitioned to dead state (qtrap) due to invalid syntax or unsupported TLD.';
+        } else {
+          verdictDetails.textContent = `Halted incomplete in non-accept state (${currentState}). String ended prematurely.`;
+        }
+      }
+    }
+
+    function stepForward() {
+      if (inputString.length === 0) {
+        verdictBox.className = 'verdict-box invalid';
+        verdictStatus.textContent = 'EMPTY INPUT';
+        verdictDetails.textContent = 'Please enter an email address to process.';
+        return false;
+      }
+
+      if (currentIndex >= inputString.length) {
+        finalizeVerdict();
+        if (autoRunInterval) clearInterval(autoRunInterval);
+        return false;
+      }
+
+      verdictBox.className = 'verdict-box processing';
+      verdictStatus.textContent = 'PROCESSING...';
+      verdictDetails.textContent = `Reading character '${inputString[currentIndex]}' (Index ${currentIndex + 1}/${inputString.length})`;
+
+      const char = inputString[currentIndex];
+      const prevState = currentState;
+      currentState = transition(currentState, char);
+
+      const logItem = document.createElement('div');
+      logItem.className = 'log-item';
+      logItem.innerHTML = `Read '<span>${char}</span>' | &delta;(${prevState}, '${char}') &rarr; <span>${currentState}</span>`;
+      logs.appendChild(logItem);
+      logs.scrollTop = logs.scrollHeight;
+
+      currentIndex++;
+      updateUI();
+
+      if (currentIndex >= inputString.length) {
+        finalizeVerdict();
+        if (autoRunInterval) clearInterval(autoRunInterval);
+        return false;
+      }
+      return true;
+    }
+
+    function loadExample(str) {
+      input.value = str;
+      initTape();
+    }
+
+    document.getElementById('btnStep').addEventListener('click', stepForward);
+    document.getElementById('btnReset').addEventListener('click', initTape);
+    document.getElementById('btnRun').addEventListener('click', () => {
+      initTape();
+      autoRunInterval = setInterval(() => {
+        if (!stepForward()) clearInterval(autoRunInterval);
+      }, 1200);
+    });
+
+    input.addEventListener('input', initTape);
+    window.onload = initTape;
+  </script>
+</body>
+</html>
